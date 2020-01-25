@@ -22,10 +22,9 @@
 
 #include "usb_api_transceiver.h"
 
-#include "hackrf-ui.h"
+#include "hackrf_ui.h"
 #include <libopencm3/cm3/vector.h>
-#include <libopencm3/lpc43xx/m4/nvic.h>
-#include "sgpio_isr.h"
+#include "usb_bulk_buffer.h"
 
 #include "usb_api_cpld.h" // Remove when CPLD update is handled elsewhere
 
@@ -257,23 +256,23 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 		led_on(LED2);
 		usb_endpoint_init(&usb_endpoint_bulk_in);
 		rf_path_set_direction(&rf_path, RF_PATH_DIRECTION_RX);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_rx;
+		usb_bulk_buffer_tx = false;
 	} else if (_transceiver_mode == TRANSCEIVER_MODE_TX) {
 		led_off(LED2);
 		led_on(LED3);
 		usb_endpoint_init(&usb_endpoint_bulk_out);
 		rf_path_set_direction(&rf_path, RF_PATH_DIRECTION_TX);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_tx;
+		usb_bulk_buffer_tx = true;
 	} else {
 		led_off(LED2);
 		led_off(LED3);
 		rf_path_set_direction(&rf_path, RF_PATH_DIRECTION_OFF);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_rx;
+		usb_bulk_buffer_tx = false;
 	}
 
 
 	if( _transceiver_mode != TRANSCEIVER_MODE_OFF ) {
-		si5351c_activate_best_clock_source(&clock_gen);
+		activate_best_clock_source();
 
         hw_sync_enable(_hw_sync_mode);
 
