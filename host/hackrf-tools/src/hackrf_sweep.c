@@ -220,6 +220,9 @@ int rx_callback(hackrf_transfer* transfer) {
 		return -1;
 	}
 
+	if(do_exit) {
+		return 0;
+	}
 	gettimeofday(&usb_transfer_time, NULL);
 	byte_count += transfer->valid_length;
 	buf = (int8_t*) transfer->buffer;
@@ -393,6 +396,7 @@ int main(int argc, char** argv) {
 	const char* serial_number = NULL;
 	int exit_code = EXIT_SUCCESS;
 	struct timeval time_now;
+	struct timeval time_prev;
 	float time_diff;
 	float sweep_rate;
 	unsigned int lna_gain=16, vga_gain=20;
@@ -702,6 +706,7 @@ int main(int argc, char** argv) {
 	}
 
 	gettimeofday(&t_start, NULL);
+	time_prev = t_start;
 
 	fprintf(stderr, "Stop with Ctrl-C\n");
 	while((hackrf_is_streaming(device) == HACKRF_TRUE) && (do_exit == false)) {
@@ -709,20 +714,23 @@ int main(int argc, char** argv) {
 		m_sleep(50);
 
 		gettimeofday(&time_now, NULL);
-		
-		time_difference = TimevalDiff(&time_now, &t_start);
-		sweep_rate = (float)sweep_count / time_difference;
-		fprintf(stderr, "%" PRIu64 " total sweeps completed, %.2f sweeps/second\n",
-				sweep_count, sweep_rate);
+		if (TimevalDiff(&time_now, &time_prev) >= 1.0f) {
+			time_difference = TimevalDiff(&time_now, &t_start);
+			sweep_rate = (float)sweep_count / time_difference;
+			fprintf(stderr, "%" PRIu64 " total sweeps completed, %.2f sweeps/second\n",
+					sweep_count, sweep_rate);
 
-		if (byte_count == 0) {
-			exit_code = EXIT_FAILURE;
-			fprintf(stderr, "\nCouldn't transfer any data for one second.\n");
-			break;
+			if (byte_count == 0) {
+				exit_code = EXIT_FAILURE;
+				fprintf(stderr, "\nCouldn't transfer any data for one second.\n");
+				break;
+			}
+			byte_count = 0;
+			time_prev = time_now;
 		}
-		byte_count = 0;
 	}
 
+	fflush(outfile);
 	result = hackrf_is_streaming(device);	
 	if (do_exit) {
 		fprintf(stderr, "\nExiting...\n");
@@ -737,14 +745,6 @@ int main(int argc, char** argv) {
 			sweep_count, time_diff, sweep_rate);
 
 	if(device != NULL) {
-		result = hackrf_stop_rx(device);
-		if(result != HACKRF_SUCCESS) {
-			fprintf(stderr, "hackrf_stop_rx() failed: %s (%d)\n",
-				   hackrf_error_name(result), result);
-		} else {
-			fprintf(stderr, "hackrf_stop_rx() done\n");
-		}
-
 		result = hackrf_close(device);
 		if(result != HACKRF_SUCCESS) {
 			fprintf(stderr, "hackrf_close() failed: %s (%d)\n",
